@@ -19,55 +19,57 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /////////////////////////////////////////////////////////////////////
+#pragma once
 
 #include <Arduino.h>
 #include <PinChangeInt.h>  // http://playground.arduino.cc/Main/PinChangeInt
 #include <TimerOne.h>      // http://playground.arduino.cc/Code/Timer1
 #include <stdint.h>
 
-class RFController{
-   public:
-      RFController(int ch_num,int* ch_pins); 
-      ~RFController(); 
-   private:
-      uint8_t chNum;
-      uint8_t* chPins; 
-      uint16_t* pulseWidth;
-      uint8_t chIndex;
-      /* define ISR function "rise" */
-      void rise();
-      /* define ISR function "fall" */
-      void fall();
-;
+
+/* function prototypes */
+void rise();      // ISR - Do not call!
+void fall();      // ISR - Do not call!
+void Init_RC_Controller(uint8_t ch_num,uint8_t* ch_pins); // This is the only function that needs to be called 
+
+struct RFController{
+   uint8_t chNum;
+   uint8_t* chPins; 
+   uint16_t* pulseWidth;
+   uint8_t chIndex;
+}rfController;
 
 
-RFController::RFController(int ch_num,int* ch_pins):
-   chNum(ch_num),
-   chPins(ch_pins),
-   pulseWidth(new uint16_t[ch_num]),
-   chIndex(0)
-{
-   for(uint8_t i=0;i<chPins;++i){
-      pulseWidth[i]=0;
+void InitRFController(uint8_t ch_num,uint8_t* ch_pins){
+   rfController.chNum=ch_num;
+   rfController.chPins=ch_pins;
+   rfController.pulseWidth=new uint16_t[ch_num];
+   rfController.chIndex=0;
+   for(uint8_t i=0;i<rfController.chNum;++i){
+      rfController.pulseWidth[i]=0;
    }
+   /* initialize interrupt */
+   PCintPort::attachInterrupt(rfController.chPins[rfController.chIndex],&rise,RISING);
+   /* initalize timer */
+   Timer1.initialize(1024);
 }
 
 /* define ISR function "rise" */
 // TODO: update variables to reflect changes
-void RFController::rise(){
+void rise(){
    Timer1.restart();
    Timer1.start();
-   PCintPort::detachInterrupt(PIN_NO[pin_index]);
-   PCintPort::attachInterrupt(PIN_NO[pin_index],&fall,CHANGE);
+   PCintPort::detachInterrupt(rfController.chPins[rfController.chIndex]);
+   PCintPort::attachInterrupt(rfController.chPins[rfController.chIndex],&fall,CHANGE);
 }
 
 /* define ISR function "fall" */
 // TODO: update variables to reflect changes
-void RFController::fall(){ 
-   PPM_TIME[pin_index] = Timer1.read();
-   PCintPort::detachInterrupt(PIN_NO[pin_index]);
-   pin_index = (pin_index+1) % PIN_COUNT;
-   PCintPort::attachInterrupt(PIN_NO[pin_index],&rise,CHANGE);
+void fall(){ 
+   rfController.pulseWidth[rfController.chIndex] = Timer1.read();
+   PCintPort::detachInterrupt(rfController.chPins[rfController.chIndex]);
+   rfController.chIndex = (rfController.chIndex+1) % rfController.chNum;
+   PCintPort::attachInterrupt(rfController.chPins[rfController.chIndex],&rise,CHANGE);
 }
 
 
